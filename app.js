@@ -477,14 +477,6 @@ function setMonth(delta) {
 }
 $$('[data-month]').forEach(b => b.addEventListener('click', () => setMonth(Number(b.dataset.month))));
 
-$('#listFilter').addEventListener('click', ev => {
-  const b = ev.target.closest('.pill');
-  if (!b) return;
-  listFilter = b.dataset.f;
-  $$('#listFilter .pill').forEach(x => x.classList.toggle('is-on', x === b));
-  renderList();
-});
-
 /** 明细页顶部那条「固定成本」折叠。默认收起，状态记在 state.ui 里。 */
 function fixedFoldHTML(ym) {
   const fm = fixedOfMonth(ym);
@@ -544,17 +536,29 @@ function renderList() {
   const monthAll = recordsOfMonth(viewMonth);
   const exp = sumBy(monthAll, 'expense');
   const inc = sumBy(monthAll, 'income');
-  $('#listStat').innerHTML = `
-    <div class="stat-card"><div class="k">支出</div><div class="v v-exp">¥${fmtMoney(exp)}</div></div>
-    <div class="stat-card"><div class="k">收入</div><div class="v v-inc">¥${fmtMoney(inc)}</div></div>
-    <div class="stat-card"><div class="k">结余</div><div class="v">¥${fmtMoney(inc - exp)}</div></div>`;
 
   const rows = listFilter === 'all' ? monthAll : monthAll.filter(r => r.type === listFilter);
   const body = $('#listBody');
-  const fold = fixedFoldHTML(viewMonth);
+
+  // 统计卡和筛选条放在滚动区里（而不是固定在顶部），
+  // 这样五个页面的顶部区高度一致，切换标签时内容不会跳。
+  const head = `
+    <div class="stat-row">
+      <div class="stat-card"><div class="k">支出</div><div class="v v-exp">¥${fmtMoney(exp)}</div></div>
+      <div class="stat-card"><div class="k">收入</div><div class="v v-inc">¥${fmtMoney(inc)}</div></div>
+      <div class="stat-card"><div class="k">结余</div><div class="v">¥${fmtMoney(inc - exp)}</div></div>
+    </div>
+    ${fixedFoldHTML(viewMonth)}
+    <div class="filters">
+      <div class="pill-group">
+        <button class="pill${listFilter === 'all' ? ' is-on' : ''}" data-f="all">全部</button>
+        <button class="pill${listFilter === 'expense' ? ' is-on' : ''}" data-f="expense">支出</button>
+        <button class="pill${listFilter === 'income' ? ' is-on' : ''}" data-f="income">收入</button>
+      </div>
+    </div>`;
 
   if (!rows.length) {
-    body.innerHTML = fold + `<div class="empty"><span class="big">🗒️</span>${
+    body.innerHTML = head + `<div class="empty"><span class="big">🗒️</span>${
       monthAll.length ? '这个筛选条件下没有记录' : '这个月还没有记录<br>去「记账」记一笔吧'
     }</div>`;
     return;
@@ -568,7 +572,7 @@ function renderList() {
     map[r.date].push(r);
   }
 
-  body.innerHTML = fold + groups.map(date => {
+  body.innerHTML = head + groups.map(date => {
     const items = map[date];
     const e = sumBy(items, 'expense');
     const i = sumBy(items, 'income');
@@ -606,6 +610,12 @@ function escapeHTML(s) {
 }
 
 $('#listBody').addEventListener('click', ev => {
+  const pill = ev.target.closest('.pill');
+  if (pill) {
+    listFilter = pill.dataset.f;
+    renderList();
+    return;
+  }
   if (ev.target.closest('[data-fold]')) {
     state.ui.fixedOpen = !state.ui.fixedOpen;
     save();
@@ -916,7 +926,7 @@ function renderWealth() {
   const fm = fixedOfMonth(thisYM());
   const year = now.getFullYear();
   const s = loansSummary();
-  const out = [];
+  const out = ['<p class="page-sub">每月必须交的钱，和欠的钱</p>'];
 
   out.push(`
     <div class="hero">
