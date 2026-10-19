@@ -182,14 +182,23 @@ ul{margin:0;padding:0;list-style:none}
 }
 .seg-btn.is-on{color:var(--text);font-weight:600}
 
-.amount-box{flex-shrink:0;padding:0 14px}
+/* 记账页：让金额区吃掉剩余高度，内容垂直居中，
+   键盘固定在底部、高度随屏幕伸缩——否则大屏手机上中间会空一大块 */
+.amount-box{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:0 14px;
+}
 .amount-line{
   display:flex;align-items:baseline;justify-content:center;gap:4px;
-  padding:18px 0 4px;
+  padding:8px 0 4px;
 }
 .cur{font-size:24px;font-weight:600;color:var(--sub);align-self:flex-start;margin-top:8px}
 .amount{
-  font-size:46px;font-weight:700;letter-spacing:-1px;
+  font-size:clamp(38px, 12vw, 54px);font-weight:700;letter-spacing:-1px;
   font-variant-numeric:tabular-nums;line-height:1.1;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
@@ -237,7 +246,9 @@ ul{margin:0;padding:0;list-style:none}
   gap:1px;
   background:var(--line);
   border-top:1px solid var(--line);
-  height:264px;
+  /* safe-area 要加在高度之外，否则 iPhone 上按键会被压扁 */
+  height:calc(264px + var(--safe-b));
+  height:calc(clamp(236px, 30dvh, 300px) + var(--safe-b));
   padding-bottom:var(--safe-b);
 }
 .key{
@@ -259,6 +270,25 @@ ul{margin:0;padding:0;list-style:none}
 
 /* ============ 明细列表 ============ */
 .day-group{margin-bottom:12px}
+
+/* 明细页顶部的固定成本折叠 */
+.fold{background:var(--card);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.fold-head{display:flex;align-items:center;gap:8px;padding:11px 13px}
+.fold-head:active{background:#f7f8fa}
+.fold.is-open .fold-head{background:#fafbfc}
+.fold-title{font-size:13px;font-weight:600;color:var(--sub)}
+.fold-amt{margin-left:auto;font-size:14px;font-weight:650;
+  font-variant-numeric:tabular-nums;color:var(--sub)}
+.fold-arrow{width:12px;text-align:center;font-size:11px;color:var(--muted)}
+.fold-hint{margin-left:auto;font-size:12px;color:#b26a00}
+.fold-body{border-top:1px solid var(--line);padding:2px 13px 10px}
+.fold-row{display:flex;justify-content:space-between;font-size:13px;
+  padding:6px 0;color:var(--sub)}
+.fold-row span:last-child{font-variant-numeric:tabular-nums}
+.fold-row em{font-style:normal;font-size:11px;color:var(--muted);
+  background:#f0f1f4;border-radius:4px;padding:0 4px;margin-left:4px}
+.fold-total{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;
+  color:var(--text);font-weight:600}
 .day-head{
   display:flex;align-items:baseline;justify-content:space-between;
   padding:8px 4px 6px;font-size:12.5px;color:var(--muted);

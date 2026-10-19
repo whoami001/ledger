@@ -49,7 +49,7 @@ const defaultState = () => ({
   records: [],          // 日常流水
   loans: [],            // 债务：余额、利率、月供、到期日
   fees: [],             // 固定费用：物业费、取暖费、保险等
-  ui: { type: 'expense', cat: { expense: 'food', income: 'salary' } },
+  ui: { type: 'expense', cat: { expense: 'food', income: 'salary' }, fixedOpen: false },
 });
 
 let state = defaultState();
@@ -485,6 +485,58 @@ $('#listFilter').addEventListener('click', ev => {
   renderList();
 });
 
+/** 明细页顶部那条「固定成本」折叠。默认收起，状态记在 state.ui 里。 */
+function fixedFoldHTML(ym) {
+  const fm = fixedOfMonth(ym);
+  if (!state.loans.length && !state.fees.length) {
+    return `<div class="fold">
+      <div class="fold-head" data-gowealth="1">
+        <span class="fold-title">固定成本</span>
+        <span class="fold-hint">还没录入，点这里去「家底」添加 ›</span>
+      </div>
+    </div>`;
+  }
+
+  const open = !!state.ui.fixedOpen;
+  const lines = [];
+  for (const L of state.loans) {
+    if (!loanActive(L, ym)) continue;
+    lines.push(`<div class="fold-row"><span>${escapeHTML(L.name)}</span>
+      <span>¥${fmtMoney(L.monthly)}</span></div>`);
+  }
+  const mm = Number(ym.slice(5, 7));
+  for (const F of state.fees) {
+    const amt = Number(F.amount) || 0;
+    if (F.cycle === 'year') {
+      if (Number(F.month) !== mm) continue;
+      lines.push(`<div class="fold-row"><span>${escapeHTML(F.name)}<em>年缴</em></span>
+        <span>¥${fmtMoney(amt)}</span></div>`);
+    } else {
+      lines.push(`<div class="fold-row"><span>${escapeHTML(F.name)}</span>
+        <span>¥${fmtMoney(amt)}</span></div>`);
+    }
+  }
+  if (!lines.length) {
+    lines.push(`<div class="fold-row"><span>这个月没有固定扣款</span><span>—</span></div>`);
+  }
+
+  const flowExp = sumBy(recordsOfMonth(ym), 'expense');
+  return `<div class="fold${open ? ' is-open' : ''}">
+    <div class="fold-head" data-fold="1">
+      <span class="fold-title">固定成本</span>
+      <span class="fold-amt">¥${fmtMoney(fm.total)}</span>
+      <span class="fold-arrow">${open ? '▾' : '▸'}</span>
+    </div>
+    ${open ? `<div class="fold-body">
+      ${lines.join('')}
+      <div class="fold-row fold-total"><span>固定成本合计</span>
+        <span>¥${fmtMoney(fm.total)}</span></div>
+      <div class="fold-row fold-total"><span>本月实际支出（流水 + 固定）</span>
+        <span>¥${fmtMoney(flowExp + fm.total)}</span></div>
+    </div>` : ''}
+  </div>`;
+}
+
 function renderList() {
   const [y, m] = viewMonth.split('-').map(Number);
   $('#listMonth').textContent = `${y}年${m}月`;
@@ -499,9 +551,10 @@ function renderList() {
 
   const rows = listFilter === 'all' ? monthAll : monthAll.filter(r => r.type === listFilter);
   const body = $('#listBody');
+  const fold = fixedFoldHTML(viewMonth);
 
   if (!rows.length) {
-    body.innerHTML = `<div class="empty"><span class="big">🗒️</span>${
+    body.innerHTML = fold + `<div class="empty"><span class="big">🗒️</span>${
       monthAll.length ? '这个筛选条件下没有记录' : '这个月还没有记录<br>去「记账」记一笔吧'
     }</div>`;
     return;
@@ -515,7 +568,7 @@ function renderList() {
     map[r.date].push(r);
   }
 
-  body.innerHTML = groups.map(date => {
+  body.innerHTML = fold + groups.map(date => {
     const items = map[date];
     const e = sumBy(items, 'expense');
     const i = sumBy(items, 'income');
@@ -553,6 +606,16 @@ function escapeHTML(s) {
 }
 
 $('#listBody').addEventListener('click', ev => {
+  if (ev.target.closest('[data-fold]')) {
+    state.ui.fixedOpen = !state.ui.fixedOpen;
+    save();
+    renderList();
+    return;
+  }
+  if (ev.target.closest('[data-gowealth]')) {
+    switchView('wealth');
+    return;
+  }
   const el = ev.target.closest('.rec');
   if (el) openRecordEdit(el.dataset.id);
 });
