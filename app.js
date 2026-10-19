@@ -239,6 +239,7 @@ function switchView(name) {
   if (name === 'chart') renderChart();
   if (name === 'wealth') renderWealth();
   if (name === 'me') renderMe();
+  renderChips();
 }
 $('#tabbar').addEventListener('click', ev => {
   const tab = ev.target.closest('.tab');
@@ -336,6 +337,7 @@ function commitRecord() {
   add.buf = '';
   add.note = '';
   add.date = todayStr();
+  renderChips();
   renderAmount();
   renderAddMeta();
   flashSaved();
@@ -695,6 +697,7 @@ function refreshCurrentView() {
   else if (currentView === 'chart') renderChart();
   else if (currentView === 'wealth') renderWealth();
   else if (currentView === 'me') renderMe();
+  renderChips();
 }
 
 /* =========================================================
@@ -1387,6 +1390,7 @@ function clearAll() {
   save();
   toast('已清空');
   renderMe();
+  renderChips();
 }
 
 /* =========================================================
@@ -1409,6 +1413,32 @@ document.addEventListener('keydown', ev => {
     add.buf = ''; add.note = ''; renderAmount(); renderAddMeta();
   }
 });
+
+/* =========================================================
+   顶部右侧的简介胶囊
+   每页显示该页最关键的那一个数，让五个页面的顶部长得一样。
+   ========================================================= */
+function renderChips() {
+  // 记账：今天花了多少
+  const t = todayStr();
+  let todayExp = 0;
+  for (const r of state.records) {
+    if (r.type === 'expense' && r.date === t) todayExp += r.amount;
+  }
+  const a = $('#chipAdd');
+  if (a) a.textContent = `今天 ¥${fmtMoney(todayExp)}`;
+
+  // 家底：负债总额
+  const w = $('#chipWealth');
+  if (w) {
+    const total = loansSummary().balance;
+    w.textContent = total > 0 ? `负债 ¥${fmtShort(total)}` : '负债 —';
+  }
+
+  // 我的：一共记了多少笔
+  const m = $('#chipMe');
+  if (m) m.textContent = `共 ${state.records.length} 笔`;
+}
 
 /* =========================================================
    启动
