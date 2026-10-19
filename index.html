@@ -99,6 +99,15 @@
     <div class="scroll" id="chartBody"></div>
   </main>
 
+  <!-- ===== 家底 ===== -->
+  <main class="view" id="view-wealth">
+    <header class="head">
+      <h1 class="page-title">家底</h1>
+      <p class="page-sub">每月必须交的钱，和欠的钱</p>
+    </header>
+    <div class="scroll" id="wealthBody"></div>
+  </main>
+
   <!-- ===== 我的 ===== -->
   <main class="view" id="view-me">
     <header class="head"><h1 class="page-title">我的</h1></header>
@@ -111,6 +120,9 @@
     </button>
     <button class="tab" data-view="list">
       <span class="tab-ico">☰</span><span>明细</span>
+    </button>
+    <button class="tab" data-view="wealth">
+      <span class="tab-ico">◈</span><span>家底</span>
     </button>
     <button class="tab" data-view="chart">
       <span class="tab-ico">◔</span><span>图表</span>
@@ -172,9 +184,21 @@
     <button class="sheet-save is-hidden" id="dataOk">确定</button>
   </div>
   <div class="sheet-body">
+    <button class="add-btn" id="dataPickFile" style="margin-bottom:12px">📂 选择备份文件</button>
     <textarea class="editor" id="dataEditor" spellcheck="false"></textarea>
     <p class="hint" id="dataHint"></p>
   </div>
+  <input type="file" id="dataFile" accept=".json,application/json" style="display:none">
+</div>
+
+<!-- 编辑债务 / 固定费用 -->
+<div class="sheet" id="sheetItem">
+  <div class="sheet-head">
+    <button class="sheet-cancel" data-close>取消</button>
+    <h2 id="itemTitle">编辑</h2>
+    <button class="sheet-save" id="itemSave">保存</button>
+  </div>
+  <div class="sheet-body" id="itemBody"></div>
 </div>
 
 <div class="toast" id="toast"></div>

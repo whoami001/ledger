@@ -45,8 +45,10 @@ let storageOK = true;
 let demoMode = false;
 
 const defaultState = () => ({
-  version: 1,
-  records: [],
+  version: 2,
+  records: [],          // 日常流水
+  loans: [],            // 债务：余额、利率、月供、到期日
+  fees: [],             // 固定费用：物业费、取暖费、保险等
   ui: { type: 'expense', cat: { expense: 'food', income: 'salary' } },
 });
 
@@ -60,6 +62,9 @@ function load() {
     if (data && Array.isArray(data.records)) {
       state = Object.assign(defaultState(), data);
       state.ui = Object.assign(defaultState().ui, data.ui || {});
+      // 老版本的数据没有这两项，补上空数组
+      if (!Array.isArray(state.loans)) state.loans = [];
+      if (!Array.isArray(state.fees)) state.fees = [];
     }
   } catch (err) {
     storageOK = false;
@@ -121,6 +126,15 @@ function seedDemo() {
   ];
   for (const p of plan) push(p[0], p[1], p[2], p[3], p[4]);
   state.records = out;
+
+  // 预览用的示例贷款和固定费用（都是假数字，仅用于看界面）
+  state.loans = [
+    { id: 'dl1', name: '示例房贷', balance: 500000, rate: 0.031, monthly: 2178, end: '2055-08' },
+  ];
+  state.fees = [
+    { id: 'df1', name: '物业费', amount: 434.71, cycle: 'month', month: 0 },
+    { id: 'df2', name: '取暖费', amount: 2688.90, cycle: 'year', month: 11 },
+  ];
 }
 
 /* ---------- 小工具 ---------- */
@@ -223,6 +237,7 @@ function switchView(name) {
   $$('#tabbar .tab').forEach(t => t.classList.toggle('is-on', t.dataset.view === name));
   if (name === 'list') renderList();
   if (name === 'chart') renderChart();
+  if (name === 'wealth') renderWealth();
   if (name === 'me') renderMe();
 }
 $('#tabbar').addEventListener('click', ev => {
@@ -605,12 +620,24 @@ $('#editDelete').addEventListener('click', () => {
 function refreshCurrentView() {
   if (currentView === 'list') renderList();
   else if (currentView === 'chart') renderChart();
+  else if (currentView === 'wealth') renderWealth();
   else if (currentView === 'me') renderMe();
 }
 
 /* =========================================================
    图表页
    ========================================================= */
+/** 某年 1 月到 uptoMonth 月之间，手记流水的支出合计 */
+function flowExpenseBetween(year, uptoMonth) {
+  let sum = 0;
+  for (const r of state.records) {
+    if (r.type !== 'expense') continue;
+    const [y, m] = ymOf(r.date).split('-').map(Number);
+    if (y === year && m <= uptoMonth) sum += r.amount;
+  }
+  return sum;
+}
+
 function renderChart() {
   const [y, m] = viewMonth.split('-').map(Number);
   $('#chartMonth').textContent = `${y}年${m}月`;
@@ -654,7 +681,33 @@ function renderChart() {
     return days ? exp / days : 0;
   })();
 
-  $('#chartBody').innerHTML = `
+  /* --- 年度总支出：这才是"我一年花多少"的答案 --- */
+  const vy = y;
+  const nowD = new Date();
+  const upto = vy === nowD.getFullYear() ? nowD.getMonth() + 1 : 12;
+  const flowY = flowExpenseBetween(vy, upto);
+  const fixedY = fixedOfYearUpto(vy, upto);
+  const totalY = flowY + fixedY;
+  const hasFixed = state.loans.length || state.fees.length;
+
+  const yearPanel = `
+    <div class="panel">
+      <div class="panel-title"><span>${vy} 年总支出</span><span class="sub">1–${upto} 月</span></div>
+      <div class="kv-row"><span class="k">日常（手记的流水）</span><span class="v">¥${fmtMoney(flowY)}</span></div>
+      <div class="kv-row"><span class="k">固定（房贷 / 物业 / 保险等）</span><span class="v">¥${fmtMoney(fixedY)}</span></div>
+      <div class="kv-row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px">
+        <span class="k" style="color:var(--text);font-weight:600">合计</span>
+        <span class="v" style="font-size:17px">¥${fmtMoney(totalY)}</span>
+      </div>
+      ${upto > 0 ? `<div class="kv-row"><span class="k">推算全年</span>
+        <span class="v">约 ¥${fmtMoney(flowY / upto * 12 + fixedOfYear(vy))}</span></div>
+        <p class="hint" style="margin-top:2px">日常按已发生的比例年化；固定成本是确定的，直接取全年计划。</p>` : ''}
+      ${hasFixed ? '' : `<p class="hint" style="margin-top:8px;color:#b26a00">
+        ⚠️ 还没录入固定成本，上面的「固定」是 0。去「家底」录一次，
+        年支出才是真实的——旧账本漏掉的正是这一块。</p>`}
+    </div>`;
+
+  $('#chartBody').innerHTML = yearPanel + `
     <div class="panel">
       <div class="panel-title"><span>本月总览</span><span class="sub">近 6 个月趋势见下</span></div>
       <div class="stat-row" style="padding:0">
@@ -706,6 +759,318 @@ function trendSVG(trend) {
 }
 
 /* =========================================================
+   家底：固定成本与债务
+
+   日常记账只覆盖「随手花掉的钱」。房贷、物业、取暖、保险这些每月/每年
+   固定要交的，一次录进来、之后自动计入年度支出——否则年度支出会被
+   严重低估（这是旧账本最大的问题：8.6 万/年的房贷车贷一条都没记）。
+   ========================================================= */
+
+/** 某笔贷款在某年某月是否处于还款期 */
+function loanActive(loan, ym) {
+  if (loan.start && ym < loan.start) return false;
+  if (loan.end && ym > loan.end) return false;
+  return true;
+}
+
+/** 某个月的固定支出，拆成：贷款月供 / 每月费用 / 当月缴纳的年度费用 */
+function fixedOfMonth(ym) {
+  let loan = 0, mfee = 0, yfee = 0;
+  for (const L of state.loans) {
+    if (loanActive(L, ym)) loan += Number(L.monthly) || 0;
+  }
+  const m = Number(ym.slice(5, 7));
+  for (const F of state.fees) {
+    const amt = Number(F.amount) || 0;
+    if (F.cycle === 'year') {
+      if (Number(F.month) === m) yfee += amt;
+    } else {
+      mfee += amt;
+    }
+  }
+  return { loan, mfee, yfee, total: loan + mfee + yfee };
+}
+
+function fixedOfYear(year) {
+  let sum = 0;
+  for (let m = 1; m <= 12; m++) sum += fixedOfMonth(`${year}-${pad2(m)}`).total;
+  return sum;
+}
+
+/** 今年到某月为止的固定成本，用来和同期流水对比 */
+function fixedOfYearUpto(year, uptoMonth) {
+  let sum = 0;
+  for (let m = 1; m <= uptoMonth; m++) sum += fixedOfMonth(`${year}-${pad2(m)}`).total;
+  return sum;
+}
+
+function loansSummary() {
+  let balance = 0, monthly = 0, interest = 0;
+  for (const L of state.loans) {
+    balance += Number(L.balance) || 0;
+    monthly += Number(L.monthly) || 0;
+    interest += (Number(L.balance) || 0) * (Number(L.rate) || 0) / 12;
+  }
+  return { balance, monthly, interest, principal: monthly - interest };
+}
+
+/** 按当前月供还要多少期才还得完；月供不够覆盖利息就返回 Infinity */
+function monthsToPayoff(balance, rate, monthly) {
+  if (!(balance > 0) || !(monthly > 0)) return null;
+  const r = rate / 12;
+  if (r <= 0) return balance / monthly;
+  if (monthly <= balance * r) return Infinity;
+  return -Math.log(1 - balance * r / monthly) / Math.log(1 + r);
+}
+
+/** 按当前月供一直还到第 months 期时，还剩多少本金 */
+function tailAt(balance, rate, monthly, months) {
+  const r = rate / 12;
+  if (r <= 0) return Math.max(0, balance - monthly * months);
+  const f = Math.pow(1 + r, months);
+  return balance * f - monthly * (f - 1) / r;
+}
+
+function monthsUntil(ym) {
+  if (!ym) return null;
+  const [y, m] = String(ym).split('-').map(Number);
+  const now = new Date();
+  return (y - now.getFullYear()) * 12 + (m - (now.getMonth() + 1));
+}
+
+/** '2026-10' -> '2026年10月' */
+function ymLabel(ym) {
+  const [y, m] = String(ym).split('-');
+  return `${y}年${Number(m)}月`;
+}
+
+function pctText(rate) {
+  return (rate * 100).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function renderWealth() {
+  const now = new Date();
+  const fm = fixedOfMonth(thisYM());
+  const year = now.getFullYear();
+  const s = loansSummary();
+  const out = [];
+
+  out.push(`
+    <div class="hero">
+      <div class="h-k">每月固定支出</div>
+      <div class="h-v">¥${fmtMoney(fm.total)}</div>
+      <div class="h-sub">贷款月供 + 每月固定费用${fm.yfee > 0 ? ' + 本月一次性缴纳' : ''}</div>
+      <div class="hero-grid">
+        <div><div class="k">每年固定</div><div class="v">¥${fmtMoney(fixedOfYear(year))}</div></div>
+        <div><div class="k">负债总额</div><div class="v">¥${fmtMoney(s.balance)}</div></div>
+      </div>
+    </div>`);
+
+  /* ---- 债务 ---- */
+  out.push(`<div class="grp-title">债务 · ${state.loans.length} 笔</div>`);
+  if (!state.loans.length) {
+    out.push(`<div class="empty" style="padding:22px 0">还没有录入贷款</div>`);
+  }
+  for (const L of state.loans) {
+    const bal = Number(L.balance) || 0;
+    const rate = Number(L.rate) || 0;
+    const monthly = Number(L.monthly) || 0;
+    const interest = bal * rate / 12;
+    const principal = monthly - interest;
+    const pctInt = monthly > 0 ? Math.max(0, Math.min(100, interest / monthly * 100)) : 0;
+
+    const meta = [`余额 ¥${fmtMoney(bal)}`, `年利率 ${pctText(rate)}%`];
+    if (L.end) meta.push(`到期 ${ymLabel(L.end)}`);
+
+    let alert = '';
+    const n = monthsToPayoff(bal, rate, monthly);
+    const left = monthsUntil(L.end);
+    if (n === Infinity) {
+      alert = '月供还不够覆盖利息，这笔贷款按现在的还法永远还不完。';
+    } else if (n && L.end && left > 0 && n > left * 1.02) {
+      const tail = tailAt(bal, rate, monthly, left);
+      alert = `按现在的月供要 ${(n / 12).toFixed(1)} 年才还完，比到期日晚。到 ${ymLabel(L.end)} 时还剩约 ¥${fmtMoney(tail)} 要一次性结清。`;
+    }
+
+    out.push(`
+      <div class="item" data-loan="${L.id}">
+        <div class="item-top">
+          <span class="item-name">${escapeHTML(L.name || '未命名')}</span>
+          <span class="item-amt">¥${fmtMoney(monthly)}<span style="font-size:11px;color:var(--muted);font-weight:400">/月</span></span>
+        </div>
+        <div class="item-meta">${meta.join(' · ')}</div>
+        ${monthly > 0 ? `
+          <div class="split">
+            <i class="s-int" style="width:${pctInt.toFixed(1)}%"></i>
+            <i class="s-pri" style="width:${(100 - pctInt).toFixed(1)}%"></i>
+          </div>
+          <div class="legend">
+            <span><em style="background:#f4553d"></em>利息 ¥${fmtMoney(interest)}</span>
+            <span><em style="background:#12a45c"></em>本金 ¥${fmtMoney(principal)}</span>
+          </div>` : ''}
+        ${alert ? `<div class="warn" style="margin:10px 0 0">⚠️ ${alert}</div>` : ''}
+      </div>`);
+  }
+  out.push(`<button class="add-btn" data-add="loan">＋ 添加一笔贷款</button>`);
+
+  /* ---- 固定费用 ---- */
+  out.push(`<div class="grp-title" style="margin-top:16px">固定费用 · ${state.fees.length} 项</div>`);
+  if (!state.fees.length) {
+    out.push(`<div class="empty" style="padding:22px 0">还没有录入固定费用</div>`);
+  }
+  for (const F of state.fees) {
+    const amt = Number(F.amount) || 0;
+    const isYear = F.cycle === 'year';
+    const per = isYear
+      ? `${Number(F.month) || 1} 月缴纳 · 折合每月 ¥${fmtMoney(amt / 12)}`
+      : `每月缴纳 · 折合每年 ¥${fmtMoney(amt * 12)}`;
+    out.push(`
+      <div class="item" data-fee="${F.id}">
+        <div class="item-top">
+          <span class="item-name">${escapeHTML(F.name || '未命名')}</span>
+          <span class="item-amt">¥${fmtMoney(amt)}<span style="font-size:11px;color:var(--muted);font-weight:400">/${isYear ? '年' : '月'}</span></span>
+        </div>
+        <div class="item-meta">${per}</div>
+      </div>`);
+  }
+  out.push(`<button class="add-btn" data-add="fee">＋ 添加一项固定费用</button>`);
+  out.push(`<p class="hint">这些钱不经过你每天记账，但往往是你支出里最大的一块。录一次即可，之后自动计入年度支出。</p>`);
+
+  $('#wealthBody').innerHTML = out.join('');
+}
+
+$('#wealthBody').addEventListener('click', ev => {
+  const loan = ev.target.closest('[data-loan]');
+  if (loan) { openLoanForm(loan.dataset.loan); return; }
+  const fee = ev.target.closest('[data-fee]');
+  if (fee) { openFeeForm(fee.dataset.fee); return; }
+  const add = ev.target.closest('[data-add]');
+  if (add) add.dataset.add === 'loan' ? openLoanForm() : openFeeForm();
+});
+
+/* ---- 编辑表单 ---- */
+let itemKind = null;   // 'loan' | 'fee'
+let itemId = null;
+
+function openLoanForm(id) {
+  itemKind = 'loan';
+  itemId = id || null;
+  const L = id ? state.loans.find(x => x.id === id) : null;
+  $('#itemTitle').textContent = L ? '编辑贷款' : '添加贷款';
+  $('#itemBody').innerHTML = `
+    <label class="field"><span class="field-label">名称</span>
+      <input class="field-input" id="f-name" type="text" placeholder="例如：天津房贷" value="${escapeAttr(L ? L.name : '')}"></label>
+    <label class="field"><span class="field-label">当前剩余本金（元）</span>
+      <input class="field-input" id="f-balance" type="text" inputmode="decimal" value="${L ? num(L.balance) : ''}"></label>
+    <label class="field"><span class="field-label">年利率（% ，填 3.1 就是 3.1%）</span>
+      <input class="field-input" id="f-rate" type="text" inputmode="decimal" value="${L ? num((Number(L.rate) || 0) * 100) : ''}"></label>
+    <label class="field"><span class="field-label">每月还款（元）</span>
+      <input class="field-input" id="f-monthly" type="text" inputmode="decimal" value="${L ? num(L.monthly) : ''}"></label>
+    <label class="field"><span class="field-label">到期月份（选填，用来检查还得完还不上）</span>
+      <input class="field-input" id="f-end" type="month" value="${L && L.end ? L.end : ''}"></label>
+    <p class="hint">利息和本金按「余额 × 月利率」自动拆分，你只要在每次还款后更新剩余本金。</p>
+    ${L ? `<button class="danger-btn" id="f-del">删除这笔贷款</button>` : ''}`;
+  openSheet('sheetItem');
+}
+
+function openFeeForm(id) {
+  itemKind = 'fee';
+  itemId = id || null;
+  const F = id ? state.fees.find(x => x.id === id) : null;
+  const cycle = F ? F.cycle : 'year';
+  $('#itemTitle').textContent = F ? '编辑固定费用' : '添加固定费用';
+  $('#itemBody').innerHTML = `
+    <label class="field"><span class="field-label">名称</span>
+      <input class="field-input" id="f-name" type="text" placeholder="例如：物业费、取暖费、保险" value="${escapeAttr(F ? F.name : '')}"></label>
+    <label class="field"><span class="field-label">金额（元）</span>
+      <input class="field-input" id="f-amount" type="text" inputmode="decimal" value="${F ? num(F.amount) : ''}"></label>
+    <div class="field"><span class="field-label">缴纳频率</span>
+      <div class="form-seg" id="f-cycle">
+        <button data-c="month"${cycle === 'month' ? ' class="is-on"' : ''}>每月</button>
+        <button data-c="year"${cycle === 'year' ? ' class="is-on"' : ''}>每年</button>
+      </div></div>
+    <label class="field" id="f-month-wrap"${cycle === 'month' ? ' style="display:none"' : ''}>
+      <span class="field-label">每年几月缴纳</span>
+      <input class="field-input" id="f-month" type="number" min="1" max="12" value="${F && F.month ? F.month : 11}"></label>
+    ${F ? `<button class="danger-btn" id="f-del">删除这项费用</button>` : ''}`;
+  $('#f-cycle').addEventListener('click', ev => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    $$('#f-cycle button').forEach(x => x.classList.toggle('is-on', x === b));
+    $('#f-month-wrap').style.display = b.dataset.c === 'year' ? '' : 'none';
+  });
+  openSheet('sheetItem');
+}
+
+function num(v) {
+  const n = Number(v);
+  if (!isFinite(n)) return '';
+  return String(Math.round(n * 100) / 100);
+}
+
+$('#itemSave').addEventListener('click', () => {
+  const nameEl = $('#f-name');
+  const name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { toast('先填个名称'); return; }
+
+  if (itemKind === 'loan') {
+    const balance = parseFloat($('#f-balance').value);
+    const monthly = parseFloat($('#f-monthly').value);
+    const ratePct = parseFloat($('#f-rate').value);
+    if (!(balance >= 0)) { toast('剩余本金填一下'); return; }
+    if (!(monthly >= 0)) { toast('每月还款填一下'); return; }
+    const rec = {
+      id: itemId || uid(),
+      name,
+      balance: Math.round(balance * 100) / 100,
+      rate: isFinite(ratePct) ? ratePct / 100 : 0,
+      monthly: Math.round(monthly * 100) / 100,
+      end: $('#f-end').value || '',
+    };
+    if (itemId) {
+      const i = state.loans.findIndex(x => x.id === itemId);
+      if (i > -1) state.loans[i] = rec;
+    } else {
+      state.loans.push(rec);
+    }
+  } else {
+    const amount = parseFloat($('#f-amount').value);
+    if (!(amount > 0)) { toast('金额填一下'); return; }
+    const onBtn = $('#f-cycle button.is-on');
+    const cycle = onBtn ? onBtn.dataset.c : 'year';
+    const rec = {
+      id: itemId || uid(),
+      name,
+      amount: Math.round(amount * 100) / 100,
+      cycle,
+      month: cycle === 'year' ? Math.min(12, Math.max(1, parseInt($('#f-month').value, 10) || 1)) : 0,
+    };
+    if (itemId) {
+      const i = state.fees.findIndex(x => x.id === itemId);
+      if (i > -1) state.fees[i] = rec;
+    } else {
+      state.fees.push(rec);
+    }
+  }
+  save();
+  closeSheet('sheetItem');
+  renderWealth();
+  toast('已保存');
+});
+
+$('#itemBody').addEventListener('click', ev => {
+  if (!ev.target.closest('#f-del')) return;
+  const isLoan = itemKind === 'loan';
+  if (!confirm(`确定删除${isLoan ? '这笔贷款' : '这项费用'}？`)) return;
+  if (isLoan) state.loans = state.loans.filter(x => x.id !== itemId);
+  else state.fees = state.fees.filter(x => x.id !== itemId);
+  save();
+  closeSheet('sheetItem');
+  renderWealth();
+  toast('已删除');
+});
+
+/* =========================================================
    我的
    ========================================================= */
 function renderMe() {
@@ -740,6 +1105,14 @@ function renderMe() {
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--sub)">
         本月已支出 <b style="color:var(--exp)">¥${fmtMoney(monthExp)}</b>
       </div>
+      ${state.loans.length || state.fees.length ? `
+      <div style="margin-top:8px;font-size:13px;color:var(--sub);line-height:1.9">
+        负债总额 <b>¥${fmtMoney(loansSummary().balance)}</b>　·　
+        每年固定成本 <b>¥${fmtMoney(fixedOfYear(new Date().getFullYear()))}</b>
+      </div>` : `
+      <div style="margin-top:8px;font-size:13px;color:#b26a00">
+        还没录入固定成本。房贷这类每月必须交的钱不录进来，年度支出会少掉一大块——去「家底」录一下。
+      </div>`}
     </div>
 
     <div class="sec">
@@ -796,7 +1169,10 @@ function download(filename, text, mime) {
 }
 
 function exportJSON() {
-  if (!state.records.length) { toast('还没有数据可导出'); return; }
+  if (!state.records.length && !state.loans.length && !state.fees.length) {
+    toast('还没有数据可导出');
+    return;
+  }
   const name = `账本备份-${todayStr()}.json`;
   download(name, JSON.stringify(state, null, 2));
   toast('已导出 ' + name);
@@ -824,11 +1200,31 @@ function exportCSV() {
 function openImport() {
   $('#dataTitle').textContent = '导入备份';
   $('#dataEditor').value = '';
-  $('#dataHint').textContent = '把之前导出的 JSON 内容整段粘贴到这里，然后点「确定」。导入的记录会追加到现有数据里，不会覆盖。';
+  $('#dataHint').textContent = '把 JSON 内容整段粘贴到这里，然后点「确定」。'
+    + '流水会追加（同 id 自动跳过）；贷款和固定费用按名称匹配——已存在的更新余额，不存在的添加。所以重复导入同一份不会产生重复项。';
   $('#dataOk').classList.remove('is-hidden');
   $('#dataOk').dataset.mode = 'import';
   openSheet('sheetData');
 }
+
+/* 选文件导入：手机上比粘贴一大段 JSON 现实得多 */
+$('#dataPickFile').addEventListener('click', () => {
+  const input = $('#dataFile');
+  if (input) input.click();
+});
+
+$('#dataFile').addEventListener('change', ev => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('#dataEditor').value = String(reader.result || '');
+    toast('已读取，点「确定」完成导入');
+  };
+  reader.onerror = () => toast('读取失败');
+  reader.readAsText(file);
+  ev.target.value = '';   // 允许重复选同一个文件
+});
 
 $('#dataOk').addEventListener('click', () => {
   const mode = $('#dataOk').dataset.mode;
@@ -840,11 +1236,20 @@ $('#dataOk').addEventListener('click', () => {
     toast('JSON 格式不对，请检查');
     return;
   }
-  const list = Array.isArray(data) ? data : (data && data.records);
-  if (!Array.isArray(list)) { toast('没找到记录数据'); return; }
+  const isBare = Array.isArray(data);
+  const records = isBare ? data : (data && Array.isArray(data.records) ? data.records : []);
+  const loans = !isBare && data && Array.isArray(data.loans) ? data.loans : [];
+  const fees = !isBare && data && Array.isArray(data.fees) ? data.fees : [];
+
+  if (!records.length && !loans.length && !fees.length) {
+    toast('没找到可导入的内容');
+    return;
+  }
+
+  /* 流水：按 id 去重后追加 */
   const exist = new Set(state.records.map(r => r.id));
   let added = 0;
-  for (const r of list) {
+  for (const r of records) {
     if (!r || typeof r.amount !== 'number' || !r.date) continue;
     if (r.id && exist.has(r.id)) continue;
     state.records.push({
@@ -858,9 +1263,45 @@ $('#dataOk').addEventListener('click', () => {
     });
     added++;
   }
+
+  /* 债务：同名则更新（方便你只改余额后重新导入），否则新增 */
+  let loanNew = 0, loanUpd = 0;
+  for (const L of loans) {
+    if (!L || !L.name) continue;
+    const cur = state.loans.find(x => x.name === L.name);
+    const val = {
+      balance: Math.round((Number(L.balance) || 0) * 100) / 100,
+      rate: Number(L.rate) || 0,
+      monthly: Math.round((Number(L.monthly) || 0) * 100) / 100,
+      end: L.end || '',
+    };
+    if (cur) { Object.assign(cur, val); loanUpd++; }
+    else { state.loans.push(Object.assign({ id: L.id || uid(), name: L.name }, val)); loanNew++; }
+  }
+
+  /* 固定费用：同样按名称匹配 */
+  let feeNew = 0, feeUpd = 0;
+  for (const F of fees) {
+    if (!F || !F.name) continue;
+    const cur = state.fees.find(x => x.name === F.name);
+    const val = {
+      amount: Math.round((Number(F.amount) || 0) * 100) / 100,
+      cycle: F.cycle === 'month' ? 'month' : 'year',
+      month: Math.min(12, Math.max(0, parseInt(F.month, 10) || 0)),
+    };
+    if (cur) { Object.assign(cur, val); feeUpd++; }
+    else { state.fees.push(Object.assign({ id: F.id || uid(), name: F.name }, val)); feeNew++; }
+  }
+
   save();
   closeSheet('sheetData');
-  toast(`已导入 ${added} 条记录`);
+  const parts = [];
+  if (added) parts.push(`${added} 条流水`);
+  if (loanNew) parts.push(`${loanNew} 笔贷款`);
+  if (loanUpd) parts.push(`更新 ${loanUpd} 笔贷款`);
+  if (feeNew) parts.push(`${feeNew} 项费用`);
+  if (feeUpd) parts.push(`更新 ${feeUpd} 项费用`);
+  toast(parts.length ? `已导入：${parts.join('、')}` : '没有新增内容');
   refreshCurrentView();
 });
 
@@ -925,7 +1366,7 @@ function boot() {
   renderAmount();
 
   const want = params.get('view');
-  switchView(['add', 'list', 'chart', 'me'].includes(want) ? want : 'add');
+  switchView(['add', 'list', 'wealth', 'chart', 'me'].includes(want) ? want : 'add');
 
   if (demoMode) {
     $('#tabbar') && toast('预览模式：示例数据不会保存');
