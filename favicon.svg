@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 这个文件由 tools/make-icons.py 生成，不要手改；改图标请改那个脚本。 -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b7bff"/>
+      <stop offset="1" stop-color="#2656d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <g fill="#ffffff">
+    <rect x="128" y="142" width="256" height="52" rx="26"/>
+    <rect x="128" y="230" width="192" height="52" rx="26" opacity="0.8"/>
+    <rect x="128" y="318" width="128" height="52" rx="26" opacity="0.55"/>
+  </g>
+</svg>

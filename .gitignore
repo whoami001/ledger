@@ -1,0 +1,21 @@
+# 密钥和本地配置，绝对不要提交
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+._*
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# Python（图标生成脚本可能会产生缓存）
+__pycache__/
+*.pyc
+
+# 本地账本数据（如果以后从 App 里导出备份到项目目录，别一起提交）
+账本备份-*.json
+账本-*.csv
