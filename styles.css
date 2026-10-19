@@ -64,8 +64,9 @@ ul{margin:0;padding:0;list-style:none}
   padding:calc(10px + env(safe-area-inset-top,0px)) 14px 0;
   flex-shrink:0;
 }
-/* 五个页面的顶部区统一 60px 高，这样切换标签时内容起始线不动 */
-.page-title{font-size:22px;font-weight:700;padding:8px 0 9px}
+/* 五个页面的顶部区统一：60px 高，左边粗体标题，右边放该页特有的控件 */
+.head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;height:50px}
+.page-title{font-size:21px;font-weight:700;line-height:1.2;padding:0;letter-spacing:-.2px}
 .page-sub{font-size:12.5px;color:var(--muted);padding-bottom:8px}
 
 /* ============ 家底 ============ */
@@ -130,20 +131,20 @@ ul{margin:0;padding:0;list-style:none}
 .kv-row .k{color:var(--muted)}
 .kv-row .v{font-variant-numeric:tabular-nums;font-weight:600}
 
-.month-bar{
-  display:flex;align-items:center;justify-content:center;gap:6px;
-  padding:4px 0 10px;
+.month-nav{
+  display:flex;align-items:center;
+  background:#e8eaef;border-radius:999px;padding:2px;
 }
-.month-label{
-  font-size:16px;font-weight:600;padding:6px 14px;border-radius:999px;
-  min-width:132px;text-align:center;
+.month-text{
+  font-size:13.5px;font-weight:600;min-width:82px;text-align:center;
+  font-variant-numeric:tabular-nums;
 }
-.month-label:active{background:#e8eaef}
 .arrow{
-  width:34px;height:34px;border-radius:50%;
-  font-size:19px;color:var(--sub);line-height:1;
+  width:30px;height:30px;border-radius:50%;
+  font-size:18px;color:var(--sub);line-height:1;
+  display:grid;place-items:center;
 }
-.arrow:active{background:#e8eaef}
+.arrow:active{background:#d8dce3}
 
 .stat-row{display:flex;gap:8px;padding-bottom:10px}
 .stat-card{
@@ -165,9 +166,9 @@ ul{margin:0;padding:0;list-style:none}
 .pill.is-on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
 /* ============ 记账页 ============ */
-.seg-wrap{padding:calc(12px + env(safe-area-inset-top,0px)) 14px 7px;flex-shrink:0}
 .seg{
   position:relative;display:flex;background:#e8eaef;border-radius:999px;padding:3px;
+  margin-bottom:10px;
 }
 .seg-thumb{
   position:absolute;top:3px;left:3px;

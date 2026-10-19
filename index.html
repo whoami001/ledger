@@ -23,15 +23,16 @@
 
   <!-- ===== 记账 ===== -->
   <main class="view is-active" id="view-add">
-    <div class="seg-wrap">
+    <header class="head">
+      <div class="head-row"><h1 class="page-title">记账</h1></div>
+    </header>
+
+    <section class="amount-box">
       <div class="seg" id="typeSeg">
         <span class="seg-thumb" id="segThumb"></span>
         <button class="seg-btn is-on" data-type="expense">支出</button>
         <button class="seg-btn" data-type="income">收入</button>
       </div>
-    </div>
-
-    <section class="amount-box">
       <div class="amount-line">
         <span class="cur">¥</span>
         <span class="amount" id="amountText">0</span>
@@ -70,10 +71,13 @@
   <!-- ===== 明细 ===== -->
   <main class="view" id="view-list">
     <header class="head">
-      <div class="month-bar">
-        <button class="arrow" data-month="-1">‹</button>
-        <button class="month-label" id="listMonth">2026年10月</button>
-        <button class="arrow" data-month="1">›</button>
+      <div class="head-row">
+        <h1 class="page-title">明细</h1>
+        <div class="month-nav">
+          <button class="arrow" data-month="-1">‹</button>
+          <span class="month-text" id="listMonth">2026年10月</span>
+          <button class="arrow" data-month="1">›</button>
+        </div>
       </div>
     </header>
     <div class="scroll" id="listBody"></div>
@@ -82,10 +86,13 @@
   <!-- ===== 图表 ===== -->
   <main class="view" id="view-chart">
     <header class="head">
-      <div class="month-bar">
-        <button class="arrow" data-month="-1">‹</button>
-        <button class="month-label" id="chartMonth">2026年10月</button>
-        <button class="arrow" data-month="1">›</button>
+      <div class="head-row">
+        <h1 class="page-title">图表</h1>
+        <div class="month-nav">
+          <button class="arrow" data-month="-1">‹</button>
+          <span class="month-text" id="chartMonth">2026年10月</span>
+          <button class="arrow" data-month="1">›</button>
+        </div>
       </div>
     </header>
     <div class="scroll" id="chartBody"></div>
@@ -94,14 +101,16 @@
   <!-- ===== 家底 ===== -->
   <main class="view" id="view-wealth">
     <header class="head">
-      <h1 class="page-title">家底</h1>
+      <div class="head-row"><h1 class="page-title">家底</h1></div>
     </header>
     <div class="scroll" id="wealthBody"></div>
   </main>
 
   <!-- ===== 我的 ===== -->
   <main class="view" id="view-me">
-    <header class="head"><h1 class="page-title">我的</h1></header>
+    <header class="head">
+      <div class="head-row"><h1 class="page-title">我的</h1></div>
+    </header>
     <div class="scroll" id="meBody"></div>
   </main>
 
