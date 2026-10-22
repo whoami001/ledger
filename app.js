@@ -1451,9 +1451,11 @@ function registerSW() {
                  location.hostname === 'localhost' ||
                  location.hostname === '127.0.0.1';
   if (!secure) return;
-  navigator.serviceWorker.register('sw.js').catch(err => {
-    console.warn('离线缓存注册失败（不影响使用）：', err);
-  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then(reg => reg.update())
+    .catch(err => {
+      console.warn('离线缓存注册失败（不影响使用）：', err);
+    });
 }
 
 function boot() {

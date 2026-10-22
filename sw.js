@@ -2,7 +2,7 @@
    只在 HTTPS 或 localhost 下会生效 —— 浏览器规定局域网 http 地址不允许注册
    Service Worker，所以用 start.sh 走局域网时它会被跳过，这是正常的。 */
 
-const CACHE = 'xiaozhangben-v1';
+const CACHE = 'xiaozhangben-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -43,15 +43,43 @@ self.addEventListener('fetch', event => {
   try { url = new URL(req.url); } catch { return; }
   if (url.origin !== self.location.origin) return;
 
-  // 先给缓存（快），同时在后台更新（下次打开就是新版）
+  const put = res => {
+    if (res && res.ok && res.type === 'basic') {
+      caches.open(CACHE).then(c => c.put(req, res.clone())).catch(() => {});
+    }
+    return res;
+  };
+
+  // 页面和核心代码联网时优先取新版，断网时再回退到缓存。
+  // 这样 GitHub Pages 部署后不会一直显示旧版。
+  if (req.mode === 'navigate' || req.destination === 'script' || req.destination === 'style') {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-store' });
+        if (fresh) return put(fresh);
+      } catch {}
+
+      const cached = await caches.match(req, { ignoreSearch: true });
+      if (cached) return cached;
+
+      if (req.mode === 'navigate') {
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+      }
+      return new Response('离线，且没有缓存副本', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    })());
+    return;
+  }
+
+  // 图片等静态资源先用缓存保证离线速度，同时后台更新。
   event.respondWith((async () => {
     const cached = await caches.match(req, { ignoreSearch: true });
 
     const network = fetch(req).then(res => {
-      if (res && res.ok && res.type === 'basic') {
-        caches.open(CACHE).then(c => c.put(req, res.clone())).catch(() => {});
-      }
-      return res;
+      return put(res);
     }).catch(() => null);
 
     if (cached) return cached;
