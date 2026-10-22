@@ -486,7 +486,7 @@ function fixedFoldHTML(ym) {
     return `<div class="fold">
       <div class="fold-head" data-gowealth="1">
         <span class="fold-title">固定成本</span>
-        <span class="fold-hint">还没录入，点这里去「家底」添加 ›</span>
+        <span class="fold-hint">还没录入，点这里去「固定与负债」添加 ›</span>
       </div>
     </div>`;
   }
@@ -779,7 +779,7 @@ function renderChart() {
         <span class="v">约 ¥${fmtMoney(flowY / upto * 12 + fixedOfYear(vy))}</span></div>
         <p class="hint" style="margin-top:2px">日常按已发生的比例年化；固定成本是确定的，直接取全年计划。</p>` : ''}
       ${hasFixed ? '' : `<p class="hint" style="margin-top:8px;color:#b26a00">
-        ⚠️ 还没录入固定成本，上面的「固定」是 0。去「家底」录一次，
+        ⚠️ 还没录入固定成本，上面的「固定」是 0。去「固定与负债」录一次，
         年支出才是真实的——旧账本漏掉的正是这一块。</p>`}
     </div>`;
 
@@ -835,7 +835,7 @@ function trendSVG(trend) {
 }
 
 /* =========================================================
-   家底：固定成本与债务
+   固定与负债：固定成本与债务
 
    日常记账只覆盖「随手花掉的钱」。房贷、物业、取暖、保险这些每月/每年
    固定要交的，一次录进来、之后自动计入年度支出——否则年度支出会被
@@ -1187,7 +1187,7 @@ function renderMe() {
         每年固定成本 <b>¥${fmtMoney(fixedOfYear(new Date().getFullYear()))}</b>
       </div>` : `
       <div style="margin-top:8px;font-size:13px;color:#b26a00">
-        还没录入固定成本。房贷这类每月必须交的钱不录进来，年度支出会少掉一大块——去「家底」录一下。
+        还没录入固定成本。房贷这类每月必须交的钱不录进来，年度支出会少掉一大块——去「固定与负债」录一下。
       </div>`}
     </div>
 
@@ -1428,7 +1428,7 @@ function renderChips() {
   const a = $('#chipAdd');
   if (a) a.textContent = `今天 ¥${fmtMoney(todayExp)}`;
 
-  // 家底：负债总额
+  // 固定与负债：负债总额
   const w = $('#chipWealth');
   if (w) {
     const total = loansSummary().balance;
