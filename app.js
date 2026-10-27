@@ -48,7 +48,7 @@ const defaultState = () => ({
   version: 2,
   records: [],          // 日常流水
   loans: [],            // 债务：余额、利率、月供、到期日
-  fees: [],             // 固定费用：物业费、取暖费、保险等
+  fees: [],             // 固定支出：物业费、取暖费、保险等
   ui: { type: 'expense', cat: { expense: 'food', income: 'salary' }, fixedOpen: false },
 });
 
@@ -127,7 +127,7 @@ function seedDemo() {
   for (const p of plan) push(p[0], p[1], p[2], p[3], p[4]);
   state.records = out;
 
-  // 预览用的示例贷款和固定费用（都是假数字，仅用于看界面）
+  // 预览用的示例贷款和固定支出（都是假数字，仅用于看界面）
   state.loans = [
     { id: 'dl1', name: '示例房贷', balance: 500000, rate: 0.031, monthly: 2178, end: '2055-08' },
   ];
@@ -486,7 +486,7 @@ function fixedFoldHTML(ym) {
     return `<div class="fold">
       <div class="fold-head" data-gowealth="1">
         <span class="fold-title">固定成本</span>
-        <span class="fold-hint">还没录入，点这里去「固定与负债」添加 ›</span>
+        <span class="fold-hint">还没录入，点这里去「负债」添加 ›</span>
       </div>
     </div>`;
   }
@@ -779,7 +779,7 @@ function renderChart() {
         <span class="v">约 ¥${fmtMoney(flowY / upto * 12 + fixedOfYear(vy))}</span></div>
         <p class="hint" style="margin-top:2px">日常按已发生的比例年化；固定成本是确定的，直接取全年计划。</p>` : ''}
       ${hasFixed ? '' : `<p class="hint" style="margin-top:8px;color:#b26a00">
-        ⚠️ 还没录入固定成本，上面的「固定」是 0。去「固定与负债」录一次，
+        ⚠️ 还没录入固定成本，上面的「固定」是 0。去「负债」录一次，
         年支出才是真实的——旧账本漏掉的正是这一块。</p>`}
     </div>`;
 
@@ -835,7 +835,7 @@ function trendSVG(trend) {
 }
 
 /* =========================================================
-   固定与负债：固定成本与债务
+   负债：债务、固定支出与本月支出
 
    日常记账只覆盖「随手花掉的钱」。房贷、物业、取暖、保险这些每月/每年
    固定要交的，一次录进来、之后自动计入年度支出——否则年度支出会被
@@ -926,19 +926,22 @@ function pctText(rate) {
 
 function renderWealth() {
   const now = new Date();
-  const fm = fixedOfMonth(thisYM());
+  const ym = thisYM();
+  const fm = fixedOfMonth(ym);
+  const flow = sumBy(recordsOfMonth(ym), 'expense');
   const year = now.getFullYear();
   const s = loansSummary();
-  const out = ['<p class="page-sub">每月必须交的钱，和欠的钱</p>'];
+  const out = ['<p class="page-sub">每月支出与欠款</p>'];
 
   out.push(`
     <div class="hero">
-      <div class="h-k">每月固定支出</div>
-      <div class="h-v">¥${fmtMoney(fm.total)}</div>
-      <div class="h-sub">贷款月供 + 每月固定费用${fm.yfee > 0 ? ' + 本月一次性缴纳' : ''}</div>
-      <div class="hero-grid">
-        <div><div class="k">每年固定</div><div class="v">¥${fmtMoney(fixedOfYear(year))}</div></div>
-        <div><div class="k">负债总额</div><div class="v">¥${fmtMoney(s.balance)}</div></div>
+      <div class="h-k">本月支出</div>
+      <div class="h-v">¥${fmtMoney(flow + fm.total)}</div>
+      <div class="h-sub">本月固定 ¥${fmtMoney(fm.total)} · 已合并日常流水</div>
+      <div class="hero-grid is-three">
+        <div><div class="k">本月流水</div><div class="v">¥${fmtShort(flow)}</div></div>
+        <div><div class="k">每年固定</div><div class="v">¥${fmtShort(fixedOfYear(year))}</div></div>
+        <div><div class="k">负债总额</div><div class="v">¥${fmtShort(s.balance)}</div></div>
       </div>
     </div>`);
 
@@ -989,10 +992,10 @@ function renderWealth() {
   }
   out.push(`<button class="add-btn" data-add="loan">＋ 添加一笔贷款</button>`);
 
-  /* ---- 固定费用 ---- */
-  out.push(`<div class="grp-title" style="margin-top:16px">固定费用 · ${state.fees.length} 项</div>`);
+  /* ---- 固定支出 ---- */
+  out.push(`<div class="grp-title" style="margin-top:16px">固定支出 · ${state.fees.length} 项</div>`);
   if (!state.fees.length) {
-    out.push(`<div class="empty" style="padding:22px 0">还没有录入固定费用</div>`);
+    out.push(`<div class="empty" style="padding:22px 0">还没有录入固定支出</div>`);
   }
   for (const F of state.fees) {
     const amt = Number(F.amount) || 0;
@@ -1009,8 +1012,8 @@ function renderWealth() {
         <div class="item-meta">${per}</div>
       </div>`);
   }
-  out.push(`<button class="add-btn" data-add="fee">＋ 添加一项固定费用</button>`);
-  out.push(`<p class="hint">这些钱不经过你每天记账，但往往是你支出里最大的一块。录一次即可，之后自动计入年度支出。</p>`);
+  out.push(`<button class="add-btn" data-add="fee">＋ 添加一项固定支出</button>`);
+  out.push(`<p class="hint">日常流水会自动汇总到顶部；这里的固定支出不要再在记账页重复录入。录一次即可，之后自动计入年度支出。</p>`);
 
   $('#wealthBody').innerHTML = out.join('');
 }
@@ -1054,7 +1057,7 @@ function openFeeForm(id) {
   itemId = id || null;
   const F = id ? state.fees.find(x => x.id === id) : null;
   const cycle = F ? F.cycle : 'year';
-  $('#itemTitle').textContent = F ? '编辑固定费用' : '添加固定费用';
+  $('#itemTitle').textContent = F ? '编辑固定支出' : '添加固定支出';
   $('#itemBody').innerHTML = `
     <label class="field"><span class="field-label">名称</span>
       <input class="field-input" id="f-name" type="text" placeholder="例如：物业费、取暖费、保险" value="${escapeAttr(F ? F.name : '')}"></label>
@@ -1187,7 +1190,7 @@ function renderMe() {
         每年固定成本 <b>¥${fmtMoney(fixedOfYear(new Date().getFullYear()))}</b>
       </div>` : `
       <div style="margin-top:8px;font-size:13px;color:#b26a00">
-        还没录入固定成本。房贷这类每月必须交的钱不录进来，年度支出会少掉一大块——去「固定与负债」录一下。
+        还没录入固定成本。房贷这类每月必须交的钱不录进来，年度支出会少掉一大块——去「负债」录一下。
       </div>`}
     </div>
 
@@ -1277,7 +1280,7 @@ function openImport() {
   $('#dataTitle').textContent = '导入备份';
   $('#dataEditor').value = '';
   $('#dataHint').textContent = '把 JSON 内容整段粘贴到这里，然后点「确定」。'
-    + '流水会追加（同 id 自动跳过）；贷款和固定费用按名称匹配——已存在的更新余额，不存在的添加。所以重复导入同一份不会产生重复项。';
+    + '流水会追加（同 id 自动跳过）；贷款和固定支出按名称匹配——已存在的更新余额，不存在的添加。所以重复导入同一份不会产生重复项。';
   $('#dataOk').classList.remove('is-hidden');
   $('#dataOk').dataset.mode = 'import';
   openSheet('sheetData');
@@ -1355,7 +1358,7 @@ $('#dataOk').addEventListener('click', () => {
     else { state.loans.push(Object.assign({ id: L.id || uid(), name: L.name }, val)); loanNew++; }
   }
 
-  /* 固定费用：同样按名称匹配 */
+  /* 固定支出：同样按名称匹配 */
   let feeNew = 0, feeUpd = 0;
   for (const F of fees) {
     if (!F || !F.name) continue;
@@ -1428,11 +1431,11 @@ function renderChips() {
   const a = $('#chipAdd');
   if (a) a.textContent = `今天 ¥${fmtMoney(todayExp)}`;
 
-  // 固定与负债：负债总额
+  // 负债：欠款总额
   const w = $('#chipWealth');
   if (w) {
     const total = loansSummary().balance;
-    w.textContent = total > 0 ? `负债 ¥${fmtShort(total)}` : '负债 —';
+    w.textContent = total > 0 ? `欠款 ¥${fmtShort(total)}` : '欠款 —';
   }
 
   // 我的：一共记了多少笔

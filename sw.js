@@ -2,7 +2,7 @@
    只在 HTTPS 或 localhost 下会生效 —— 浏览器规定局域网 http 地址不允许注册
    Service Worker，所以用 start.sh 走局域网时它会被跳过，这是正常的。 */
 
-const CACHE = 'xiaozhangben-v2';
+const CACHE = 'xiaozhangben-v3';
 const ASSETS = [
   './',
   './index.html',
